@@ -18,4 +18,9 @@ import spotipy.util as util
 import warnings
 warnings.filterwarnings("ignore")
 
-spotify_df = pd.read_csv('/MRS/dataset.csv')
+spotify_df = pd.read_csv('D:/cpp/MRS/dataset.csv')
+
+print(spotify_df.head())
+
+sorted_data = spotify_df.drop(['Unnamed: 0', ])
+sorted_data.drop_duplicates(subset=['track_id'], inplace=True)
