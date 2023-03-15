@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import json
 
+from skimage import io
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
@@ -93,12 +94,72 @@ client_secret = "f5389add4e8b4d08be7e6aad586685e3"
 
 
 scope = "user-library-read"
-if len(sys.argv) > 1:
-    username = sys.argv[1]
-else:
-    print("Usage: %s username" % (sys.argv[0],))
-    sys.exit()
+# if len(sys.argv) > 1:
+#     username = sys.argv[1]
+# else:
+#print("Usage: %s username" % (sys.argv[0],))
+# sys.exit()
 
 auth_manager = SpotifyClientCredentials(
     client_id=client_id, client_secret=client_secret)
 sp = spotipy.Spotify(auth_manager=auth_manager)
+
+token = util.prompt_for_user_token(
+    scope, client_id=client_id, client_secret=client_secret, redirect_uri="https://localhost:8881/")
+sp = spotipy.Spotify(auth=token)
+
+# user playlsts
+id_name = {}
+list_photo = {}
+for i in sp.current_user_playlists()['items']:
+    id_name[i['name']] = i['uri'].split(':')[2]
+    list_photo[i['uri'].split(':')[2]] = i['images'][0]['url']
+
+
+def create_neccesary_playlist(playlist_name, id_dic, df):
+    playlist = pd.DataFrame()
+    playlist_name = playlist_name
+
+    for ix, i in enumerate(sp.playlist(id_dic[playlist_name])['tracks']['items']):
+        # print(i['track']['artists'][0]['name'])
+        playlist.loc[ix, 'artists'] = i['track']['artists'][0]['name']
+        playlist.loc[ix, 'name'] = i['track']['name']
+        playlist.loc[ix, 'id'] = i['track']['id']
+        playlist.loc[ix, 'url'] = i['track']['album']['images'][1]['url']
+        playlist.loc[ix, 'date_added'] = i['added_at']
+
+    playlist['date_added'] = pd.to_datetime(playlist['date_added'])
+    playlist = playlist[playlist['id'].isin(
+        df['track_id'].values)].sort_values('date_added', ascending=True)
+    return playlist
+
+
+def visualize_songs(df):
+    temp = df['url'].values
+    plt.figure(figsize=(15, int(0.625*len(temp))))
+    columns = 5
+
+    for i, url in enumerate(temp):
+        plt.subplot(int(len(temp)/columns+1), columns, i+1)
+        image = io.imread(url)
+        plt.imshow(image)
+        plt.xticks(color='w', fontsize=0.1)
+        plt.yticks(color='w', fontsize=0.1)
+        plt.xlabel(df['name'].values[i], fontsize=12)
+        plt.tight_layout(h_pad=0.4, w_pad=0)
+        plt.subplots_adjust(wspace=None, hspace=None)
+
+    plt.show()
+
+
+user_playlist = create_neccesary_playlist('Updowntown', id_name, spotify_df)
+
+# visualize_songs(user_playlist)
+
+print(feature_set)
+print(user_playlist)
+
+
+def generate_playlist_feature(complete_feature_set, playlist_df, weight_factor):
+    complete_feature_set_playlist = complete_feature_set[complete_feature_set['id'].isin(
+        playlist_df['id'].values)]
