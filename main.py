@@ -115,6 +115,8 @@ for i in sp.current_user_playlists()['items']:
     id_name[i['name']] = i['uri'].split(':')[2]
     list_photo[i['uri'].split(':')[2]] = i['images'][0]['url']
 
+# print(id_name)
+
 
 def create_neccesary_playlist(playlist_name, id_dic, df):
     playlist = pd.DataFrame()
@@ -153,13 +155,62 @@ def visualize_songs(df):
 
 
 user_playlist = create_neccesary_playlist('Updowntown', id_name, spotify_df)
-
+nilabh_playlist = create_neccesary_playlist('2', id_name, spotify_df)
 # visualize_songs(user_playlist)
 
-print(feature_set)
-print(user_playlist)
+feature_set.rename(columns={'track_id': 'id'}, inplace=True)
 
 
 def generate_playlist_feature(complete_feature_set, playlist_df, weight_factor):
     complete_feature_set_playlist = complete_feature_set[complete_feature_set['id'].isin(
         playlist_df['id'].values)]
+    complete_feature_set_playlist = complete_feature_set_playlist.merge(
+        playlist_df[['id', 'date_added']], on='id', how='inner')
+    complete_feature_set_nonplaylist = complete_feature_set[~complete_feature_set['id'].isin(
+        playlist_df['id'].values)]
+
+    playlist_feature_set = complete_feature_set_playlist.sort_values(
+        'date_added', ascending=False)
+    most_recent_date = playlist_feature_set.iloc[0, -1]
+
+    for ix, row in playlist_feature_set.iterrows():
+        playlist_feature_set.loc[ix, 'months_from_recent'] = int(
+            (most_recent_date.to_pydatetime()-row.iloc[-1].to_pydatetime()).days/30)
+
+    playlist_feature_set['weight'] = playlist_feature_set['months_from_recent'].apply(
+        lambda x: weight_factor ** (-x))
+    playlist_feature_set_weighted = playlist_feature_set.copy()
+
+    playlist_feature_set_weighted.update(
+        playlist_feature_set_weighted.iloc[:, :-4].mul(playlist_feature_set_weighted.weight, 0))
+    playlist_feature_set_weighted_final = playlist_feature_set_weighted.iloc[:, :-4]
+    return playlist_feature_set_weighted_final.sum(axis=0), complete_feature_set_nonplaylist
+
+
+updowntown_playlist_vector, updowntown_nonplaylist_vector = generate_playlist_feature(
+    feature_set, user_playlist, 1.06)
+nilabh_playlist_vector, nilabh_nonplaylist_vector = generate_playlist_feature(
+    feature_set, nilabh_playlist, 1)
+
+
+def generate_playlist_recos(df, features, nonplaylist_features):
+    non_playlist_df = df[df['track_id'].isin(
+        nonplaylist_features['id'].values)]
+    non_playlist_df['sim'] = cosine_similarity(
+        nonplaylist_features.drop('id', axis=1).values, features.values.reshape(1, -1))[:, 0]
+    non_playlist_df = non_playlist_df.drop_duplicates('track_id')
+    non_playlist_df_top50 = non_playlist_df.sort_values(
+        'sim', ascending=False).head(50)
+    non_playlist_df_top50['url'] = non_playlist_df_top50['track_id'].apply(
+        lambda x: sp.track(x)['album']['images'][1]['url'])
+
+    return non_playlist_df_top50
+
+
+recomendations = generate_playlist_recos(
+    spotify_df, updowntown_playlist_vector, updowntown_nonplaylist_vector)
+
+nilabh_recomendation = generate_playlist_recos(
+    spotify_df, nilabh_playlist_vector, nilabh_nonplaylist_vector)
+print(recomendations['track_name'])
+print(nilabh_recomendation['track_name'])
