@@ -5,6 +5,10 @@ import pandas as pd
 import numpy as np
 import json
 
+from PIL import Image
+import requests
+from io import BytesIO
+
 from skimage import io
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -19,6 +23,7 @@ import spotipy.util as util
 import warnings
 warnings.filterwarnings("ignore")
 
+# https://www.kaggle.com/datasets/maharshipandya/-spotify-tracks-dataset
 spotify_df = pd.read_csv('D:/cpp/MRS/dataset.csv')
 
 
@@ -106,6 +111,7 @@ sp = spotipy.Spotify(auth_manager=auth_manager)
 
 token = util.prompt_for_user_token(
     scope, client_id=client_id, client_secret=client_secret, redirect_uri="https://localhost:8881/")
+
 sp = spotipy.Spotify(auth=token)
 
 # user playlsts
@@ -115,7 +121,7 @@ for i in sp.current_user_playlists()['items']:
     id_name[i['name']] = i['uri'].split(':')[2]
     list_photo[i['uri'].split(':')[2]] = i['images'][0]['url']
 
-# print(id_name)
+print(id_name)
 
 
 def create_neccesary_playlist(playlist_name, id_dic, df):
@@ -139,23 +145,27 @@ def create_neccesary_playlist(playlist_name, id_dic, df):
 def visualize_songs(df):
     temp = df['url'].values
     plt.figure(figsize=(15, int(0.625*len(temp))))
-    columns = 5
+    columns = 7
 
     for i, url in enumerate(temp):
+        response = requests.get(url)
+        img = Image.open(BytesIO(response.content))
         plt.subplot(int(len(temp)/columns+1), columns, i+1)
-        image = io.imread(url)
-        plt.imshow(image)
+        #image = io.imread(url)
+        plt.imshow(img)
         plt.xticks(color='w', fontsize=0.1)
         plt.yticks(color='w', fontsize=0.1)
-        plt.xlabel(df['name'].values[i], fontsize=12)
+        plt.xlabel(df['track_name'].values[i], fontsize=12)
         plt.tight_layout(h_pad=0.4, w_pad=0)
         plt.subplots_adjust(wspace=None, hspace=None)
 
     plt.show()
 
 
-user_playlist = create_neccesary_playlist('Updowntown', id_name, spotify_df)
-nilabh_playlist = create_neccesary_playlist('2', id_name, spotify_df)
+user_playlist = create_neccesary_playlist(
+    'Updowntown', id_name, spotify_df)
+nilabh_playlist = create_neccesary_playlist(
+    '2', id_name, spotify_df)
 # visualize_songs(user_playlist)
 
 feature_set.rename(columns={'track_id': 'id'}, inplace=True)
@@ -190,7 +200,7 @@ def generate_playlist_feature(complete_feature_set, playlist_df, weight_factor):
 updowntown_playlist_vector, updowntown_nonplaylist_vector = generate_playlist_feature(
     feature_set, user_playlist, 1.06)
 nilabh_playlist_vector, nilabh_nonplaylist_vector = generate_playlist_feature(
-    feature_set, nilabh_playlist, 1)
+    feature_set, nilabh_playlist, 1.03)
 
 
 def generate_playlist_recos(df, features, nonplaylist_features):
@@ -200,7 +210,7 @@ def generate_playlist_recos(df, features, nonplaylist_features):
         nonplaylist_features.drop('id', axis=1).values, features.values.reshape(1, -1))[:, 0]
     non_playlist_df = non_playlist_df.drop_duplicates('track_id')
     non_playlist_df_top50 = non_playlist_df.sort_values(
-        'sim', ascending=False).head(50)
+        'sim', ascending=False).head(25)
     non_playlist_df_top50['url'] = non_playlist_df_top50['track_id'].apply(
         lambda x: sp.track(x)['album']['images'][1]['url'])
 
@@ -212,5 +222,10 @@ recomendations = generate_playlist_recos(
 
 nilabh_recomendation = generate_playlist_recos(
     spotify_df, nilabh_playlist_vector, nilabh_nonplaylist_vector)
-print(recomendations['track_name'])
-print(nilabh_recomendation['track_name'])
+# print(recomendations['track_name'])
+# print(nilabh_recomendation['track_name'])
+visualize_songs(recomendations)
+visualize_songs(nilabh_recomendation)
+
+
+# print(sp.user_playlist('31vqfeyrgsrk3tc7g22j4tepsz3i'))
