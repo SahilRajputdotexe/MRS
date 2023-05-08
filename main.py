@@ -145,7 +145,7 @@ def create_neccesary_playlist(playlist_name, id_dic, df):
 def visualize_songs(df):
     temp = df['url'].values
     plt.figure(figsize=(15, int(0.625*len(temp))))
-    columns = 7
+    columns = 5
 
     for i, url in enumerate(temp):
         response = requests.get(url)
